@@ -1,0 +1,237 @@
+---
+title: "Using Text Ming and TidyText in R"
+author: "Mary Angelica Paitner"
+date: "March 17, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+opts_knit$set(root.dir = 'F:/My Drive/RStudio/Rladies/Qualitative_Research_In_R/Articles')
+
+install.packages("pdftools") #extract texts from pdfs
+install.packages("tm") #used for text mining
+install.packages("tidyverse") # ggplot2 and other packages
+install.packages("wordcloud") # making word clouds
+install.packages("tidytext") # use for making tidy dataframes and looking at proximity
+install.packages("magrittr") # for pipes
+install.packages("fuzzyjoin") # for joining text
+
+library(pdftools)
+library(tm)
+library(tidyverse)
+library(wordcloud)
+library(tidytext)
+library(magrittr)
+library(fuzzyjoin)
+```
+
+# Set our working directory
+
+Set your working directory to where your files are by eitehr setting via the "Sessions" tab or typing the location manually.
+
+```{r}
+setwd("F:/My Drive/RStudio/Rladies/Qualitative_Research_In_R/Articles")
+```
+
+# Create a vector of your documents
+
+```{r}
+articles <- list.files(pattern = "pdf$")
+articles
+```
+
+This will list all of your documents in a vector. Be sure you call the type of documents you want. If you don't do this, it will list all the files within that working directory. Be sure to also account for capitalization (e.g. PDF is different from pdf).
+
+
+# Use tm to create a Corpus File
+
+```{r}
+#Use tm to create Corpus file
+atc <- Corpus(URISource(articles), # Used to create our corpus document, URI Source - Tells 
+                                  # us that it is "Uniform Resource Identifier" or that the                                    # vector files names are the sources
+                
+              readerControl = list(reader = readPDF())) #readerControl here is telling the                                                          # corpus which reader to use, and                                                           # here we are using PDFs
+
+```
+
+A Corpus is a database for text!
+
+
+# Create a Term Document Matrix
+
+```{r}
+atc.tdm <- TermDocumentMatrix(atc,
+                                control = 
+                                  list(removePunctuation = TRUE, # removes punctuation
+                                       stopwords = TRUE, # removes stop words (the, of, etc.)
+                                       tolower = TRUE, # converts all letters to lowercase
+                                       stemming = TRUE, #stems words
+                                       removeNumbers = TRUE)) # removes numbers
+
+
+```
+
+Term-Document Matrix (TDM) stores counts of terms. So it will tell us how many times a term appears in a document.
+
+
+# Let's look at our data!
+
+```{r}
+inspect(atc.tdm)
+
+```
+
+
+# Let's look at frequent terms!
+
+```{r}
+
+atc.freq <- findFreqTerms(atc.tdm, lowfreq = 100, highfreq = Inf)
+atc.freq
+```
+
+
+# Making a matrix of frequent terms
+
+```{r}
+atc.matrix <- as.matrix(atc.tdm[atc.freq,]) 
+atc.matrix
+```
+
+
+# We can also sum and sort all of our terms
+
+```{r}
+sort.text <- sort(apply(atc.matrix, 1, sum), decreasing = TRUE)
+sort.text
+```
+
+# Make data frame
+
+```{r}
+text.df <- as.data.frame(sort.text)
+text.df
+```
+
+
+# Let's clean up that table
+
+```{r}
+text.df <- cbind(rownames(text.df), text.df)
+rownames(text.df) <- NULL
+colnames(text.df) <- c("word", "count")
+
+text.df
+
+```
+
+
+# We can graph our words
+
+```{r}
+p1 <- ggplot(text.df, aes(word, count)) + geom_count() + theme(legend.position="none") + theme(axis.text.x = element_text(angle = 45, hjust = 1)) + ggtitle("Word Count for Political Science Articles") + labs(y = "Word", x = "Count") + theme(plot.title = element_text(hjust = 0.5))
+
+p1
+```
+
+
+# What if we are interested in proximity?
+
+Let's say we want to know how often a set of words appears next to one word. Let's say we want to see how close some of our political words appear next to "women."
+
+Let's choose some words we are interested in:
+
+```{r}
+v <- c("voting", "knowledge", "political", "politics", "demostrate", "congress", "senators", "participation")
+```
+
+"Vote," "knowledg," and "polit" can maybe tell us if articles talk about the political knowledge and action of women.
+
+
+# Let's go back to our Corpus
+
+```{r}
+#Turn into a tidy dataframe
+atc.tidy <- tidy(atc)
+atc.tidy
+
+```
+
+
+# Tokenize into one-word-per-row dataframe
+
+```{r}
+word.data <- atc.tidy %>%
+  select(-author, -datetimestamp, -description, -language, -origin, -heading, -id) %>%  # gets rid of columns we don't really care about
+  unnest_tokens(word, text) %>% # used to break up text into individual tokens
+                                # output column is word; imput column is text
+  mutate(position = row_number()) %>% # gives a position for our words so we know how they are in relations to other words
+  filter(!word %in% tm::stopwords("en"))
+
+word.data
+
+```
+
+
+# Now we can get nearby words!
+
+Let's say we are interested in our words close to "women" and our theory tells us that we want to see if these words are within 5 word positions to women.
+
+```{r}
+wom.prox <- word.data %>%
+  filter(word == "women") %>% # proximity word we are interested in
+  select(focus_term = word, focus_position = position) %>% # we are focused on word and the relative position
+  difference_inner_join(word.data, by = c(focus_position = "position"), max_dist = 5) %>% # max distance from 5
+  mutate(distance = abs(focus_position - position))
+
+```
+
+This **WILL** take a minute
+
+We then need to regroup our words...
+
+```{r}
+wom.prox.group <- wom.prox %>%
+  group_by(word) %>%
+  summarize(number = n(),
+            maximum_distance = max(distance),
+            minimum_distance = min(distance),
+            average_distance = mean(distance)) %>%
+  arrange(desc(number))
+
+wom.prox.group
+```
+
+# Now let's parce out our words we are most interested in
+
+```{r}
+wom.pol <- wom.prox.group %>%
+  filter(word %in% v)
+
+wom.pol
+```
+
+
+# Let's graph it!
+
+```{r}
+p2 <-  ggplot(wom.pol, aes(x = reorder(word, -number), y = number, fill = average_distance)) +
+  geom_bar(stat = "identity") +
+  labs(fill = "Average Distance") +
+     theme(axis.title.y=element_blank(),
+        axis.title.x=element_blank()) +
+  ggtitle("Word Proximity to 'Woman'") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + ylim(0, 30)
+p2
+
+```
+
+
+
+
+
+
+
+
