@@ -1,14 +1,20 @@
 ---
 title: "Using Text Ming and TidyText in R"
-author: "Mary Angelica Paitner"
+author: "Mary Angelica Painter"
 date: "March 17, 2020"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-opts_knit$set(root.dir = 'F:/My Drive/RStudio/Rladies/Qualitative_Research_In_R/Articles')
 
+install.packages("knitr")
+library(knitr)
+
+# Change to your local location of the Articles folder
+opts_knit$set(root.dir = '[local location of materials]/Articles')
+
+# Install what you need
 install.packages("pdftools") #extract texts from pdfs
 install.packages("tm") #used for text mining
 install.packages("tidyverse") # ggplot2 and other packages
@@ -17,6 +23,7 @@ install.packages("tidytext") # use for making tidy dataframes and looking at pro
 install.packages("magrittr") # for pipes
 install.packages("fuzzyjoin") # for joining text
 
+# Open the packages
 library(pdftools)
 library(tm)
 library(tidyverse)
@@ -31,7 +38,8 @@ library(fuzzyjoin)
 Set your working directory to where your files are by eitehr setting via the "Sessions" tab or typing the location manually.
 
 ```{r}
-setwd("F:/My Drive/RStudio/Rladies/Qualitative_Research_In_R/Articles")
+# Change to your local location of the Articles folder
+setwd("[local location of materials]/Articles")
 ```
 
 # Create a vector of your documents
@@ -221,7 +229,7 @@ p2 <-  ggplot(wom.pol, aes(x = reorder(word, -number), y = number, fill = averag
   labs(fill = "Average Distance") +
      theme(axis.title.y=element_blank(),
         axis.title.x=element_blank()) +
-  ggtitle("Word Proximity to 'Woman'") +
+  ggtitle("Word Proximity to 'Women'") +
   theme(plot.title = element_text(hjust = 0.5)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + ylim(0, 30)
 p2
